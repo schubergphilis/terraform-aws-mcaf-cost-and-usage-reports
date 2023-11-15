@@ -1,7 +1,12 @@
 variable "bucket_name" {
-  description = "optional bucket name for the AWS CUR reports bucket, if not provided a bucket name will be generated"
   type        = string
   default     = null
+  description = "optional bucket name for the AWS CUR reports bucket, if not provided a bucket name will be generated"
+}
+
+variable "kms_key_arn" {
+  type        = string
+  description = "The KMS key ARN used for the bucket encryption"
 }
 
 variable "report_definitions" {
@@ -35,11 +40,6 @@ variable "report_definitions" {
     }
   }
   description = "AWS Cost and Usage reports definitions"
-}
-
-variable "kms_key_arn" {
-  type        = string
-  description = "The KMS key ARN used for the bucket encryption"
 }
 
 variable "tags" {
