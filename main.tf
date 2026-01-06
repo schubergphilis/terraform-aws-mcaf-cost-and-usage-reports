@@ -10,7 +10,7 @@ data "aws_iam_policy_document" "allow_access_to_curreports" {
   statement {
     principals {
       type        = "Service"
-      identifiers = ["billingreports.amazonaws.com"]
+      identifiers = ["bcm-data-exports.amazonaws.com"]
     }
 
     actions = [
@@ -21,12 +21,24 @@ data "aws_iam_policy_document" "allow_access_to_curreports" {
     resources = [
       "arn:aws:s3:::${local.cur_reports_bucket_name}"
     ]
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:bcm-data-exports:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:export/*"]
+    }
   }
 
   statement {
     principals {
       type        = "Service"
-      identifiers = ["billingreports.amazonaws.com"]
+      identifiers = ["bcm-data-exports.amazonaws.com"]
     }
 
     actions = [
@@ -36,12 +48,24 @@ data "aws_iam_policy_document" "allow_access_to_curreports" {
     resources = [
       "arn:aws:s3:::${local.cur_reports_bucket_name}/*"
     ]
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:bcm-data-exports:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:export/*"]
+    }
   }
 }
 
 module "cur_reports_bucket" {
   source  = "schubergphilis/mcaf-s3/aws"
-  version = "0.11.0"
+  version = "~> 2.0.0"
 
   name        = local.cur_reports_bucket_name
   kms_key_arn = var.kms_key_arn
@@ -61,27 +85,55 @@ module "cur_reports_bucket" {
         days = 730
       }
 
-      transition = {
-        days          = 90
-        storage_class = "INTELLIGENT_TIERING"
-      }
+      transition = [
+        {
+          days          = 90
+          storage_class = "INTELLIGENT_TIERING"
+        }
+      ]
     }
   ]
 }
 
-resource "aws_cur_report_definition" "default" {
+resource "aws_bcmdataexports_export" "default" {
   for_each = var.report_definitions
-  provider = aws.us-east-1
 
-  report_name                = each.key
-  additional_artifacts       = each.value.additional_artifacts
-  additional_schema_elements = each.value.additional_schema_elements
-  compression                = each.value.compression
-  format                     = each.value.format
-  refresh_closed_reports     = each.value.refresh_closed_reports
-  report_versioning          = each.value.report_versioning
-  s3_bucket                  = module.cur_reports_bucket.name
-  s3_prefix                  = each.key
-  s3_region                  = data.aws_region.current.name
-  time_unit                  = each.value.time_unit
+  export {
+    name = each.key
+
+    data_query {
+      query_statement = "SELECT * FROM COST_AND_USAGE_REPORT"
+
+      table_configurations = {
+        COST_AND_USAGE_REPORT = {
+          INCLUDE_MANUAL_DISCOUNT_COMPATIBILITY = each.value.include_manual_discount_compatibility ? "TRUE" : "FALSE"
+          INCLUDE_CAPACITY_RESERVATION_DATA     = each.value.include_capacity_reservation_data ? "TRUE" : "FALSE"
+          INCLUDE_RESOURCES                     = each.value.include_resources ? "TRUE" : "FALSE"
+          INCLUDE_SPLIT_COST_ALLOCATION_DATA    = each.value.include_split_cost_allocation_data ? "TRUE" : "FALSE"
+          TIME_GRANULARITY                      = each.value.time_unit
+        }
+      }
+    }
+
+    destination_configurations {
+      s3_destination {
+        s3_bucket = module.cur_reports_bucket.name
+        s3_prefix = each.key
+        s3_region = data.aws_region.current.name
+
+        s3_output_configurations {
+          overwrite   = each.value.overwrite
+          format      = each.value.format
+          compression = each.value.compression
+          output_type = "CUSTOM"
+        }
+      }
+    }
+
+    refresh_cadence {
+      frequency = "SYNCHRONOUS"
+    }
+  }
+
+  tags = var.tags
 }
