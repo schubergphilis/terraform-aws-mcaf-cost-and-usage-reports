@@ -17,11 +17,12 @@ variable "legacy_reporting" {
 
 variable "report_definitions" {
   type = map(object({
+    additional_artifacts                  = optional(list(string), null) # Only used when legacy_reporting is `true`.
     compression                           = string
     format                                = string
     include_capacity_reservation_data     = optional(bool, false)
     include_manual_discount_compatibility = optional(bool, false)
-    include_resources                     = optional(bool, false)
+    include_resources                     = optional(bool, true)
     include_split_cost_allocation_data    = optional(bool, false)
     overwrite                             = optional(string, "CREATE_NEW_REPORT")
     time_unit                             = string
@@ -31,19 +32,20 @@ variable "report_definitions" {
     hourly-gzip = {
       compression       = "GZIP"
       format            = "TEXT_OR_CSV"
+      include_resources = true
       overwrite         = "CREATE_NEW_REPORT"
       time_unit         = "HOURLY"
-      include_resources = true
     },
     daily-parquet = {
-      compression       = "PARQUET"
-      format            = "PARQUET"
-      overwrite         = "OVERWRITE_REPORT"
-      time_unit         = "DAILY"
-      include_resources = true
+      additional_artifacts = ["ATHENA"]
+      compression          = "PARQUET"
+      format               = "PARQUET"
+      include_resources    = true
+      overwrite            = "OVERWRITE_REPORT"
+      time_unit            = "DAILY"
     }
   }
-  description = "AWS Cost and Usage reports definitions using BCM Data Exports. Key is used as export name and as prefix in the s3 bucket to store the export files."
+  description = "AWS Cost and Usage reports definitions. Key is used as report/export name and as prefix in the s3 bucket to store the report/export files. Supports both legacy CUR (aws_cur_report_definition) and modern BCM Data Exports (aws_bcmdataexports_export)."
 
   validation {
     condition = alltrue([
@@ -56,7 +58,7 @@ variable "report_definitions" {
     condition = alltrue([
       for k, v in var.report_definitions : contains(["TEXT_OR_CSV", "PARQUET"], v.format)
     ])
-    error_message = "Format must be one of: TEXT_OR_CSV, or PARQUET."
+    error_message = "Format must be one of: TEXT_OR_CSV or PARQUET."
   }
 
   validation {
@@ -76,7 +78,7 @@ variable "report_definitions" {
   validation {
     condition = alltrue([
       for k, v in var.report_definitions :
-      v.compression == "PARQUET" ? (v.format == "PARQUET") : true
+      v.compression == "PARQUET" ? v.format == "PARQUET" : true
     ])
     error_message = "When compression is PARQUET, format must also be PARQUET."
   }

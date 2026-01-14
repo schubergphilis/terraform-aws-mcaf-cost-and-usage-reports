@@ -1,5 +1,5 @@
 locals {
-  cur_reports_bucket_name = var.bucket_name != null ? var.bucket_name : "aws-cur-reports-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
+  cur_reports_bucket_name = var.bucket_name != null ? var.bucket_name : "aws-cur-reports-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
 }
 
 data "aws_caller_identity" "current" {}
@@ -7,58 +7,131 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 data "aws_iam_policy_document" "allow_access_to_curreports" {
-  statement {
-    principals {
-      type        = "Service"
-      identifiers = ["bcm-data-exports.amazonaws.com"]
-    }
+  # Legacy CUR reporting policy
+  dynamic "statement" {
+    for_each = var.legacy_reporting ? { create = true } : {}
 
-    actions = [
-      "s3:GetBucketAcl",
-      "s3:GetBucketPolicy",
-    ]
+    content {
+      principals {
+        type        = "Service"
+        identifiers = ["billingreports.amazonaws.com"]
+      }
 
-    resources = [
-      "arn:aws:s3:::${local.cur_reports_bucket_name}"
-    ]
+      actions = [
+        "s3:GetBucketAcl",
+        "s3:GetBucketPolicy",
+      ]
 
-    condition {
-      test     = "StringLike"
-      variable = "aws:SourceAccount"
-      values   = [data.aws_caller_identity.current.account_id]
-    }
+      resources = [
+        "arn:aws:s3:::${local.cur_reports_bucket_name}"
+      ]
 
-    condition {
-      test     = "StringLike"
-      variable = "aws:SourceArn"
-      values   = ["arn:aws:bcm-data-exports:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:export/*"]
+      condition {
+        test     = "StringEquals"
+        variable = "aws:SourceArn"
+        values   = ["arn:aws:cur:us-east-1:${data.aws_caller_identity.current.account_id}:definition/*"]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
     }
   }
 
-  statement {
-    principals {
-      type        = "Service"
-      identifiers = ["bcm-data-exports.amazonaws.com"]
+  dynamic "statement" {
+    for_each = var.legacy_reporting ? { create = true } : {}
+
+    content {
+      principals {
+        type        = "Service"
+        identifiers = ["billingreports.amazonaws.com"]
+      }
+
+      actions = [
+        "s3:PutObject"
+      ]
+
+      resources = [
+        "arn:aws:s3:::${local.cur_reports_bucket_name}/*"
+      ]
+
+      condition {
+        test     = "StringEquals"
+        variable = "aws:SourceArn"
+        values   = ["arn:aws:cur:us-east-1:${data.aws_caller_identity.current.account_id}:definition/*"]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
     }
+  }
 
-    actions = [
-      "s3:PutObject"
-    ]
+  # Modern BCM Data Exports policy
+  dynamic "statement" {
+    for_each = var.legacy_reporting ? {} : { create = true }
 
-    resources = [
-      "arn:aws:s3:::${local.cur_reports_bucket_name}/*"
-    ]
+    content {
+      principals {
+        type        = "Service"
+        identifiers = ["bcm-data-exports.amazonaws.com"]
+      }
 
-    condition {
-      test     = "StringLike"
-      variable = "aws:SourceAccount"
-      values   = [data.aws_caller_identity.current.account_id]
+      actions = [
+        "s3:GetBucketAcl",
+        "s3:GetBucketPolicy",
+      ]
+
+      resources = [
+        "arn:aws:s3:::${local.cur_reports_bucket_name}"
+      ]
+
+      condition {
+        test     = "StringLike"
+        variable = "aws:SourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
+
+      condition {
+        test     = "StringLike"
+        variable = "aws:SourceArn"
+        values   = ["arn:aws:bcm-data-exports:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:export/*"]
+      }
     }
+  }
 
-    condition {
-      test     = "StringLike"
-      variable = "aws:SourceArn"
-      values   = ["arn:aws:bcm-data-exports:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:export/*"]
+  dynamic "statement" {
+    for_each = var.legacy_reporting ? {} : { create = true }
+
+    content {
+      principals {
+        type        = "Service"
+        identifiers = ["bcm-data-exports.amazonaws.com"]
+      }
+
+      actions = [
+        "s3:PutObject"
+      ]
+
+      resources = [
+        "arn:aws:s3:::${local.cur_reports_bucket_name}/*"
+      ]
+
+      condition {
+        test     = "StringLike"
+        variable = "aws:SourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
+
+      condition {
+        test     = "StringLike"
+        variable = "aws:SourceArn"
+        values   = ["arn:aws:bcm-data-exports:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:export/*"]
+      }
     }
   }
 }
@@ -95,8 +168,39 @@ module "cur_reports_bucket" {
   ]
 }
 
+################################################################################
+# Legacy Reporting
+################################################################################
+
+resource "aws_cur_report_definition" "default" {
+  for_each = var.legacy_reporting ? var.report_definitions : {}
+
+  provider = aws.us-east-1
+
+  report_name            = each.key
+  additional_artifacts   = each.value.additional_artifacts
+  compression            = each.value.compression == "GZIP" ? "GZIP" : "Parquet"
+  format                 = each.value.format == "TEXT_OR_CSV" ? "textORcsv" : "Parquet"
+  refresh_closed_reports = true
+  report_versioning      = each.value.overwrite
+  s3_bucket              = module.cur_reports_bucket.name
+  s3_prefix              = each.key
+  s3_region              = data.aws_region.current.region
+  time_unit              = each.value.time_unit
+
+  additional_schema_elements = compact([
+    each.value.include_resources ? "RESOURCES" : null,
+    each.value.include_split_cost_allocation_data ? "SPLIT_COST_ALLOCATION_DATA" : null,
+    each.value.include_manual_discount_compatibility ? "MANUAL_DISCOUNT_COMPATIBILITY" : null,
+  ])
+}
+
+################################################################################
+# Modern Reporting
+################################################################################
+
 resource "aws_bcmdataexports_export" "default" {
-  for_each = var.report_definitions
+  for_each = var.legacy_reporting ? {} : var.report_definitions
 
   export {
     name = each.key
@@ -119,7 +223,7 @@ resource "aws_bcmdataexports_export" "default" {
       s3_destination {
         s3_bucket = module.cur_reports_bucket.name
         s3_prefix = each.key
-        s3_region = data.aws_region.current.name
+        s3_region = data.aws_region.current.region
 
         s3_output_configurations {
           overwrite   = each.value.overwrite
