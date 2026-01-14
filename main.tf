@@ -6,6 +6,10 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
+################################################################################
+# S3 bucket to store Cost and Usage Reports
+################################################################################
+
 data "aws_iam_policy_document" "allow_access_to_curreports" {
   # Legacy CUR reporting policy
   dynamic "statement" {
@@ -177,16 +181,17 @@ resource "aws_cur_report_definition" "default" {
 
   provider = aws.us-east-1
 
-  report_name            = each.key
   additional_artifacts   = each.value.additional_artifacts
   compression            = each.value.compression == "GZIP" ? "GZIP" : "Parquet"
   format                 = each.value.format == "TEXT_OR_CSV" ? "textORcsv" : "Parquet"
   refresh_closed_reports = true
+  report_name            = each.key
   report_versioning      = each.value.overwrite
   s3_bucket              = module.cur_reports_bucket.name
   s3_prefix              = each.key
   s3_region              = data.aws_region.current.region
   time_unit              = each.value.time_unit
+  tags                   = var.tags
 
   additional_schema_elements = compact([
     each.value.include_resources ? "RESOURCES" : null,
@@ -210,8 +215,8 @@ resource "aws_bcmdataexports_export" "default" {
 
       table_configurations = {
         COST_AND_USAGE_REPORT = {
-          INCLUDE_MANUAL_DISCOUNT_COMPATIBILITY = each.value.include_manual_discount_compatibility ? "TRUE" : "FALSE"
           INCLUDE_CAPACITY_RESERVATION_DATA     = each.value.include_capacity_reservation_data ? "TRUE" : "FALSE"
+          INCLUDE_MANUAL_DISCOUNT_COMPATIBILITY = each.value.include_manual_discount_compatibility ? "TRUE" : "FALSE"
           INCLUDE_RESOURCES                     = each.value.include_resources ? "TRUE" : "FALSE"
           INCLUDE_SPLIT_COST_ALLOCATION_DATA    = each.value.include_split_cost_allocation_data ? "TRUE" : "FALSE"
           TIME_GRANULARITY                      = each.value.time_unit
@@ -226,10 +231,10 @@ resource "aws_bcmdataexports_export" "default" {
         s3_region = data.aws_region.current.region
 
         s3_output_configurations {
-          overwrite   = each.value.overwrite
-          format      = each.value.format
           compression = each.value.compression
+          format      = each.value.format
           output_type = "CUSTOM"
+          overwrite   = each.value.overwrite
         }
       }
     }
