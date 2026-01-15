@@ -1,5 +1,15 @@
 locals {
   cur_reports_bucket_name = var.bucket_name != null ? var.bucket_name : "aws-cur-reports-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
+
+  compression_map = {
+    GZIP    = "GZIP"
+    Parquet = "Parquet"
+  }
+
+  format_map = {
+    TEXT_OR_CSV = "textORcsv"
+    Parquet     = "Parquet"
+  }
 }
 
 data "aws_caller_identity" "current" {}
@@ -182,8 +192,8 @@ resource "aws_cur_report_definition" "default" {
   provider = aws.us-east-1
 
   additional_artifacts   = each.value.additional_artifacts
-  compression            = each.value.compression == "GZIP" ? "GZIP" : "Parquet"
-  format                 = each.value.format == "TEXT_OR_CSV" ? "textORcsv" : "Parquet"
+  compression            = local.compression_map[each.value.compression]
+  format                 = local.format_map[each.value.format]
   refresh_closed_reports = true
   report_name            = each.key
   report_versioning      = each.value.overwrite

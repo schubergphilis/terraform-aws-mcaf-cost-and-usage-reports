@@ -4,7 +4,9 @@ Terraform module to setup and manage AWS Cost and Usage reports.
 
 > [!IMPORTANT]
 > The AWS Cost and Usage Report service is only available in us-east-1 currently. The `aws_cur_report_definition` resource does not support a configurable region, so an aliased provider is still required to target us-east-1, even when using the AWS provider v6.
+>
 > If AWS Organizations is enabled, only the management / payer account can use this resource.
+>
 > By default, two commonly configured reports will be created. The costs related to these reports is around 5 to 10 dollars per month.
 
 > [!TIP]

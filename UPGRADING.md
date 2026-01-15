@@ -33,8 +33,6 @@ The following variables have been modified:
 
   - `report_versioning` has been replaced by `overwrite`.
 
-  - `compression` values must now be passed in uppercase.  
-    Supported values: `GZIP`, `PARQUET`
+  - `compression` values have changed in case. Supported values: `GZIP`, `PARQUET`
 
-  - `format` values must now be passed in uppercase.  
-    Supported values: `TEXTORCSV`, `PARQUET`
+  - `format` values have changed in case. Supported values: `TEXTORCSV`, `PARQUET`
