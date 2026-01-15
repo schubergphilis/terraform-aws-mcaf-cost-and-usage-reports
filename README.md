@@ -17,26 +17,27 @@ Terraform module to setup and manage AWS Cost and Usage reports.
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.2.0 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 4.52.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.9.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.19.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 4.52.0 |
-| <a name="provider_aws.us-east-1"></a> [aws.us-east-1](#provider\_aws.us-east-1) | >= 4.52.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.19.0 |
+| <a name="provider_aws.us-east-1"></a> [aws.us-east-1](#provider\_aws.us-east-1) | >= 6.19.0 |
 
 ## Modules
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_cur_reports_bucket"></a> [cur\_reports\_bucket](#module\_cur\_reports\_bucket) | schubergphilis/mcaf-s3/aws | 0.11.0 |
+| <a name="module_cur_reports_bucket"></a> [cur\_reports\_bucket](#module\_cur\_reports\_bucket) | schubergphilis/mcaf-s3/aws | ~> 2.0.0 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
+| [aws_bcmdataexports_export.default](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bcmdataexports_export) | resource |
 | [aws_cur_report_definition.default](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cur_report_definition) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.allow_access_to_curreports](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
@@ -48,7 +49,8 @@ Terraform module to setup and manage AWS Cost and Usage reports.
 |------|-------------|------|---------|:--------:|
 | <a name="input_kms_key_arn"></a> [kms\_key\_arn](#input\_kms\_key\_arn) | The KMS key ARN used for the bucket encryption | `string` | n/a | yes |
 | <a name="input_bucket_name"></a> [bucket\_name](#input\_bucket\_name) | optional bucket name for the AWS CUR reports bucket, if not provided a bucket name will be generated | `string` | `null` | no |
-| <a name="input_report_definitions"></a> [report\_definitions](#input\_report\_definitions) | AWS Cost and Usage reports definitions | <pre>map(object({<br>    additional_artifacts       = optional(list(string), null)<br>    additional_schema_elements = list(string)<br>    compression                = string<br>    format                     = string<br>    refresh_closed_reports     = optional(bool, true)<br>    report_versioning          = optional(string)<br>    time_unit                  = string<br>    }<br>  ))</pre> | <pre>{<br>  "daily-parquet": {<br>    "additional_artifacts": [<br>      "ATHENA"<br>    ],<br>    "additional_schema_elements": [<br>      "RESOURCES"<br>    ],<br>    "compression": "Parquet",<br>    "format": "Parquet",<br>    "refresh_closed_reports": true,<br>    "report_versioning": "OVERWRITE_REPORT",<br>    "time_unit": "DAILY"<br>  },<br>  "hourly-gzip": {<br>    "additional_schema_elements": [<br>      "RESOURCES"<br>    ],<br>    "compression": "GZIP",<br>    "format": "textORcsv",<br>    "refresh_closed_reports": true,<br>    "report_versioning": "CREATE_NEW_REPORT",<br>    "time_unit": "HOURLY"<br>  }<br>}</pre> | no |
+| <a name="input_legacy_reporting"></a> [legacy\_reporting](#input\_legacy\_reporting) | Enable legacy reporting | `bool` | `false` | no |
+| <a name="input_report_definitions"></a> [report\_definitions](#input\_report\_definitions) | AWS Cost and Usage reports definitions. Key is used as report/export name and as prefix in the s3 bucket to store the report/export files. Supports both legacy CUR (aws\_cur\_report\_definition) and modern BCM Data Exports (aws\_bcmdataexports\_export). | <pre>map(object({<br/>    additional_artifacts                  = optional(list(string), null) # Only used when legacy_reporting is `true`.<br/>    compression                           = string<br/>    format                                = string<br/>    include_capacity_reservation_data     = optional(bool, false)<br/>    include_manual_discount_compatibility = optional(bool, false)<br/>    include_resources                     = optional(bool, true)<br/>    include_split_cost_allocation_data    = optional(bool, false)<br/>    overwrite                             = optional(string, "CREATE_NEW_REPORT")<br/>    time_unit                             = string<br/>    }<br/>  ))</pre> | <pre>{<br/>  "daily-parquet": {<br/>    "additional_artifacts": [<br/>      "ATHENA"<br/>    ],<br/>    "compression": "PARQUET",<br/>    "format": "PARQUET",<br/>    "include_resources": true,<br/>    "overwrite": "OVERWRITE_REPORT",<br/>    "time_unit": "DAILY"<br/>  },<br/>  "hourly-gzip": {<br/>    "compression": "GZIP",<br/>    "format": "TEXT_OR_CSV",<br/>    "include_resources": true,<br/>    "overwrite": "CREATE_NEW_REPORT",<br/>    "time_unit": "HOURLY"<br/>  }<br/>}</pre> | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Map of tags | `map(string)` | `{}` | no |
 
 ## Outputs
