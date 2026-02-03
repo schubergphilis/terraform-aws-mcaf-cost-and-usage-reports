@@ -3,12 +3,12 @@ locals {
 
   compression_map = {
     GZIP    = "GZIP"
-    Parquet = "Parquet"
+    PARQUET = "Parquet"
   }
 
   format_map = {
     TEXT_OR_CSV = "textORcsv"
-    Parquet     = "Parquet"
+    PARQUET     = "Parquet"
   }
 }
 
